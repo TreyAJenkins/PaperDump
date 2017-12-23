@@ -28,6 +28,9 @@ def encode(string, name="", flags=""):
     else:
         cmp = string
 
+    if "[FAX]" in flags:
+	defblocksize = 1000.0
+
     if "[ENCRYPTED]" in flags:
         print "ENTER PASSWORD FOR ENCRYPTION"
         pw = raw_input("#> ")
