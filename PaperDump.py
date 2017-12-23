@@ -41,6 +41,7 @@ def encode(string, name="", flags=""):
         m = str(hashlib.sha512(str(pw + "PAPERDUMP") * 2).hexdigest())[:16]
         obj = AES.new(pw, AES.MODE_CFB, m)
         cmp = obj.encrypt(cmp)
+
     pkt = base64.b64encode(cmp)
     data["SIZE"] = len(pkt)
     if "[PDF417]" in flags:
