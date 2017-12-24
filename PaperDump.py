@@ -1,20 +1,20 @@
 #!/usr/bin/python
 #Author: Trey Jenkins
-#Version: 1.2.0
+#Version: 2.0.0
 
 from fpdf import FPDF
 from Crypto.Cipher import AES
-import binascii, json, zlib, time, base64, qrcode, math, os, shutil, subprocess, magic, hashlib, pdf417gen
+import binascii, json, zlib, time, base64, qrcode, math, os, shutil, subprocess, magic, hashlib, pdf417gen, uuid
 
-version = 1.2
+version = 2.0
 
 defblocksize = 1850.0
 pdfblocksize = 800.0
 
 def encode(string, name="", flags=""):
     global defblocksize
-    
-    data = {"NAME": name, "TIMESTAMP": time.time(), "TOTAL": None, "LENGTH": len(string), "SIZE": None, "BLOCK": None, "DATA": None, "FILETYPE": None, "FLAGS": flags, "SHA256": str(hashlib.sha256(string).hexdigest())}
+
+    data = {"NAME": name, "TIMESTAMP": time.time(), "VERSION": version, "TOTAL": None, "LENGTH": len(string), "SIZE": None, "BLOCK": None, "DATA": None, "FILETYPE": None, "FLAGS": flags, "SHA256": str(hashlib.sha256(string).hexdigest()), "UUID": str(uuid.uuid4()).upper()}
     QR = []
 
     data["FILETYPE"] = magic.from_buffer(string)
@@ -33,14 +33,19 @@ def encode(string, name="", flags=""):
     if "[FAX]" in flags:
 	       defblocksize = 1000.0
 
-    if "[ENCRYPTED]" in flags:
+    if "[ENCRYPTED]" in flags or "[SEALED]" in flags:
         print "ENTER PASSWORD FOR ENCRYPTION"
         pw = raw_input("#> ")
 
-        if len(pw) <= 32:
-            pw = pw + "0" * (32 - len(pw))
+        if version < 2.0:
+            if len(pw) <= 32:
+                pw = pw + "0" * (32 - len(pw))
+            else:
+                pw = pw[:32]
         else:
-            pw = pw[:32]
+            pw = hashlib.sha256(pw).hexdigest()[:32]
+
+        print pw
 
         m = str(hashlib.sha512(str(pw + "PAPERDUMP") * 2).hexdigest())[:16]
         obj = AES.new(pw, AES.MODE_CFB, m)
@@ -109,7 +114,10 @@ def generate(data, name="output.pdf"):
             else:
                 pdf.image("tmp/tmp-" + str(key["BLOCK"]) + ".png", .125, 1.375, 8.25, 8.25)
             pdf.ln(4.25)
-            pdf.cell(.25, .25, "SHA256: " + str(data["SHA256"]))
+            pdf.cell(.25, .25, "UUID: " + str(data["UUID"]))
+            pdf.ln()
+            pdf.cell(.25, .25, "HASH: " + str(data["SHA256"]))
+
         else:
             skipnext = False
     shutil.rmtree("tmp")
@@ -120,7 +128,7 @@ def decode(pdfloc):
     r = subprocess.check_output(['zbarimg', '--raw', '-q', '-Sdisable', '-Sqrcode.enable', pdfloc])
     data = r.split("\n")
     data = data[:-1]
-    info = {"NAME": None, "TIMESTAMP": None, "TOTAL": None, "LENGTH": None, "SIZE": None, "DATA": None, "FILETYPE": None, "SHA256": None}
+    info = {"NAME": None, "TIMESTAMP": None, "TOTAL": None, "LENGTH": None, "SIZE": None, "DATA": None, "FILETYPE": None, "SHA256": None, "VERSION": None, "UUID": None}
     blocks = {}
 
     for d in data:
@@ -129,7 +137,7 @@ def decode(pdfloc):
             info["SHA256"] = dat["SHA256"]
         else:
             if info["SHA256"] != dat["SHA256"]:
-                print "ERROR: BLOCK " + str(dat["BLOCK"]) + ' "' + str(dat["NAME"]) + '"' + " DOES NOT BELONG WITH THIS DATA"
+                print "HASH MISMATCH: BLOCK " + str(dat["BLOCK"]) + ' "' + str(dat["NAME"]) + '"' + " DOES NOT BELONG WITH THIS DATA"
                 return -1
         info["NAME"] = dat["NAME"]
         info["TIMESTAMP"] = dat["TIMESTAMP"]
@@ -138,7 +146,20 @@ def decode(pdfloc):
         info["SIZE"] = dat["SIZE"]
         info["FILETYPE"] = dat["FILETYPE"]
         info["FLAGS"] = dat["FLAGS"]
+        info["VERSION"] = 1.0
 
+        if "VERSION" in dat:
+            info["VERSION"] = dat["VERSION"]
+            if info["VERSION"] >= 2.0:
+                if info["UUID"] == None:
+                    info["UUID"] = dat["UUID"]
+
+
+        if info["VERSION"] >= 2.0:
+            print info["VERSION"]
+            if info["UUID"] != dat["UUID"]:
+                print "UUID MISMATCH: BLOCK " + str(dat["BLOCK"]) + ' "' + str(dat["NAME"]) + '"' + " DOES NOT BELONG WITH THIS DATA"
+                return -1
 
         blocks[dat["BLOCK"]] = dat["DATA"]
     if len(blocks) < int(info["TOTAL"]):
@@ -155,14 +176,18 @@ def decode(pdfloc):
         pkt = pkt + blocks[v]
 
     pkt = base64.b64decode(pkt)
-    if "[ENCRYPTED]" in info["FLAGS"]:
+    if "[ENCRYPTED]" in info["FLAGS"] or "[SEALED]" in info["FLAGS"]:
         print "ENTER PASSWORD FOR DECRYPTION"
         pw = raw_input("#> ")
 
-        if len(pw) <= 32:
-            pw = pw + "0" * (32 - len(pw))
+        if info["VERSION"] < 2.0:
+            if len(pw) <= 32:
+                pw = pw + "0" * (32 - len(pw))
+            else:
+                pw = pw[:32]
         else:
-            pw = pw[:32]
+            pw = hashlib.sha256(pw).hexdigest()[:32]
+
 
         m = str(hashlib.sha512(str(pw + "PAPERDUMP") * 2).hexdigest())[:16]
         obj = AES.new(pw, AES.MODE_CFB, m)
