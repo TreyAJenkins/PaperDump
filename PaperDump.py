@@ -6,10 +6,14 @@ from fpdf import FPDF
 from Crypto.Cipher import AES
 import binascii, json, zlib, time, base64, qrcode, math, os, shutil, subprocess, magic, hashlib, pdf417gen
 
+version = 1.2
+
 defblocksize = 1850.0
 pdfblocksize = 800.0
 
 def encode(string, name="", flags=""):
+    global defblocksize
+    
     data = {"NAME": name, "TIMESTAMP": time.time(), "TOTAL": None, "LENGTH": len(string), "SIZE": None, "BLOCK": None, "DATA": None, "FILETYPE": None, "FLAGS": flags, "SHA256": str(hashlib.sha256(string).hexdigest())}
     QR = []
 
@@ -27,7 +31,7 @@ def encode(string, name="", flags=""):
         cmp = string
 
     if "[FAX]" in flags:
-	defblocksize = 1000.0
+	       defblocksize = 1000.0
 
     if "[ENCRYPTED]" in flags:
         print "ENTER PASSWORD FOR ENCRYPTION"
@@ -48,6 +52,7 @@ def encode(string, name="", flags=""):
         blocksize = pdfblocksize - len(str(int(math.ceil(len(pkt) / pdfblocksize))))*2 - len(json.dumps(data))
     else:
         blocksize = defblocksize - len(str(int(math.ceil(len(pkt) / defblocksize))))*2 - len(json.dumps(data))
+
     print "Blocksize: " + str(blocksize)
     print "Length: " + str(len(pkt))
     blocks = int(math.ceil(len(pkt) / blocksize))
