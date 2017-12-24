@@ -8,8 +8,10 @@ import binascii, json, zlib, time, base64, qrcode, math, os, shutil, subprocess,
 
 version = 2.0
 
-defblocksize = 1850.0
+defblocksize = 2010.0
+#defblocksize = 1850.0
 pdfblocksize = 800.0
+faxblocksize = 1280.0
 
 def encode(string, name="", flags=""):
     global defblocksize
@@ -31,7 +33,7 @@ def encode(string, name="", flags=""):
         cmp = string
 
     if "[FAX]" in flags:
-	       defblocksize = 1000.0
+	       defblocksize = faxblocksize
 
     if "[ENCRYPTED]" in flags or "[SEALED]" in flags:
         print "ENTER PASSWORD FOR ENCRYPTION"
@@ -76,7 +78,16 @@ def encode(string, name="", flags=""):
             image = pdf417gen.render_image(codes)
             dmp["QR"] = image
         else:
-            dmp["QR"] = qrcode.make(dta)
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                border=4,
+                box_size=1
+                )
+            print "LEN: " + str(len(dta))
+            qr.add_data(dta)
+            qr.make(fit=False)
+            dmp["QR"] = qr.make_image()
         QR.append(dmp)
     data["QR"] = QR
     return data
@@ -111,6 +122,17 @@ def generate(data, name="output.pdf"):
                     skipnext = True
                 else:
                     pdf.image("tmp/tmp-" + str(key["BLOCK"]) + ".png", .125, 3.35, 8.25, 4.3)
+            elif "[DUAL]" in data["FLAGS"]:
+                if int(key["BLOCK"]) < int(data["TOTAL"]):
+                    pdf.image("tmp/tmp-" + str(key["BLOCK"]) + ".png", .125, 1.375, 4.25, 4.25)
+
+                    data["QR"][int(key["BLOCK"])]["QR"].save("tmp/tmp-" + str(key["BLOCK"] + 1) + ".png")
+                    pdf.cell(5.125, 0, "Block: " + str(int(key["BLOCK"]) + 1) + " / " + str(data["TOTAL"]), 0, 0, 'R')
+                    pdf.image("tmp/tmp-" + str(int(key["BLOCK"]) + 1) + ".png", 4.125, 5.5, 4.25, 4.25)
+
+                    skipnext = True
+                else:
+                    pdf.image("tmp/tmp-" + str(key["BLOCK"]) + ".png", .125, 1.375, 8.25, 8.25)
             else:
                 pdf.image("tmp/tmp-" + str(key["BLOCK"]) + ".png", .125, 1.375, 8.25, 8.25)
             pdf.ln(4.25)
@@ -156,7 +178,6 @@ def decode(pdfloc):
 
 
         if info["VERSION"] >= 2.0:
-            print info["VERSION"]
             if info["UUID"] != dat["UUID"]:
                 print "UUID MISMATCH: BLOCK " + str(dat["BLOCK"]) + ' "' + str(dat["NAME"]) + '"' + " DOES NOT BELONG WITH THIS DATA"
                 return -1
