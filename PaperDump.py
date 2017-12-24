@@ -12,9 +12,14 @@ defblocksize = 2010.0
 #defblocksize = 1850.0
 pdfblocksize = 800.0
 faxblocksize = 1280.0
+maxblocksize = 2500.0
 
-def encode(string, name="", flags=""):
+ERROR_CORRECT = qrcode.constants.ERROR_CORRECT_M
+
+def encode(string, name="", flags="", pw=None):
     global defblocksize
+    global ERROR_CORRECT
+
 
     data = {"NAME": name, "TIMESTAMP": time.time(), "VERSION": version, "TOTAL": None, "LENGTH": len(string), "SIZE": None, "BLOCK": None, "DATA": None, "FILETYPE": None, "FLAGS": flags, "SHA256": str(hashlib.sha256(string).hexdigest()), "UUID": str(uuid.uuid4()).upper()}
     QR = []
@@ -32,12 +37,17 @@ def encode(string, name="", flags=""):
     else:
         cmp = string
 
+    if "[MAX]" in flags:
+        ERROR_CORRECT = qrcode.constants.ERROR_CORRECT_L
+        defblocksize = maxblocksize
+
     if "[FAX]" in flags:
 	       defblocksize = faxblocksize
 
     if "[ENCRYPTED]" in flags or "[SEALED]" in flags:
-        print "ENTER PASSWORD FOR ENCRYPTION"
-        pw = raw_input("#> ")
+        if pw == None:
+            print "ENTER PASSWORD FOR ENCRYPTION"
+            pw = raw_input("#> ")
 
         if version < 2.0:
             if len(pw) <= 32:
@@ -80,7 +90,7 @@ def encode(string, name="", flags=""):
         else:
             qr = qrcode.QRCode(
                 version=None,
-                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                error_correction=ERROR_CORRECT,
                 border=4,
                 box_size=1
                 )
