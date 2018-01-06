@@ -166,7 +166,8 @@ def decode(pdfloc):
     for d in data:
         dat = json.loads(d)
         if info["SHA256"] == None:
-            info["SHA256"] = dat["SHA256"]
+            #info["SHA256"] = dat["SHA256"]
+	    pass
         else:
             if info["SHA256"] != dat["SHA256"]:
                 print "HASH MISMATCH: BLOCK " + str(dat["BLOCK"]) + ' "' + str(dat["NAME"]) + '"' + " DOES NOT BELONG WITH THIS DATA"
